@@ -19,6 +19,10 @@ int main(void)
 
     InitializePin(GPIOA, GPIO_PIN_5, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, 0);  // on-board LED
 
+
+    // prepare LED by setting up D12 for output
+    InitializePin(GPIOA, GPIO_PIN_6, GPIO_MODE_OUTPUT_PP, GPIO_NOPULL, 0);
+
     // set up for serial communication to the host computer
     // (anything we write to the serial port will appear in the terminal (i.e. serial monitor) in VSCode)
 
@@ -48,11 +52,13 @@ int main(void)
             minraw0 = raw0;
         } 
         
-        // reading under 70 is read as a press, so print whether sensor is being pressed based off of that
-        if (raw0 < 70) {
+        // reading above 3000 is read as a press, so print whether sensor is being pressed based off of that
+        if (raw0 > 2000) {
             pressed = true;
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
         } else {
             pressed = false;
+            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
         }
 
         // print the ADC values, min and max values read so far, and whether sensor is being pressed
