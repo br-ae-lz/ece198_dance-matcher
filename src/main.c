@@ -45,40 +45,64 @@ int main(void)
     // declare analog input array to store pressed state for pins A1-A4
     uint16_t ADCPressed[4];
 
-    while (true)
-    {
+    // wait for a sensor to be pressed
+    readSensors(adcInstance, ADCPressed);
+    while (!(ADCPressed[0] || ADCPressed[1] || ADCPressed[2] || ADCPressed[3])){
         readSensors(adcInstance, ADCPressed);
+    }
 
-        // for as long as sensor is pressed, light up its corresponding LED
-        if (ADCPressed[0]) {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
-        } else {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
+    // enter main puzzle loop
+    bool complete = false;
+    while (!complete)
+    {
+        for (int i = 0; i < 2; ++i) {
+            HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6 | GPIO_PIN_7);
+            HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_6);
+            HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
+            HAL_Delay(1000);
         }
 
-        if (ADCPressed[1]) {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET);
-        } else {
-            HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
-        }
+        // compose a random sequence of 4 LEDs and briefly flash them accordingly
+        // (0 -> yellow, 1 -> green, 2 -> red, 3 -> blue)
+        uint16_t randomLEDSequence[4];
+        srand(HAL_GetTick());
+        for (int i = 0; i < 4; ++i) {
+            randomLEDSequence[i] = (rand() % 4);
 
-        if (ADCPressed[2]) {
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
-        } else {
-            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+            switch (randomLEDSequence[i]) 
+            {
+                case 0:
+                    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+                    break;
+                case 1:
+                    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_7);
+                    break;
+                case 2:
+                    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_6);
+                    break;
+                case 3:
+                    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
+                    break;
+            }
+            HAL_Delay(125);
+            switch (randomLEDSequence[i]) 
+            {
+                case 0:
+                    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6);
+                    break;
+                case 1:
+                    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_7);
+                    break;
+                case 2:
+                    HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_6);
+                    break;
+                case 3:
+                    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
+                    break;
+            }
+            HAL_Delay(500);
         }
-
-        if (ADCPressed[3]) {
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
-        } else {
-            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
-        }
-
-        // print the raw ADC values for pins A1-A4
-        char buff[100];
-        sprintf(buff, "Pin A1 (Y): %hu \t Pin A2 (G): %hu \t Pin A3 (R): %hu \t Pin A4 (B): %hu \n", 
-        ReadADC(&adcInstance, ADC_CHANNEL_1), ReadADC(&adcInstance, ADC_CHANNEL_4), ReadADC(&adcInstance, ADC_CHANNEL_8), ReadADC(&adcInstance, ADC_CHANNEL_11));
-        SerialPuts(buff);
+        
     }
 
     return 0;
