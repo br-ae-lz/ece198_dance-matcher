@@ -13,7 +13,15 @@
 #define A3_PRESSED 3000
 #define A4_PRESSED 3000
 
+// if defined, debug fail conditions will be printed to the screen upon each failed attempt
+#define DEBUG
+
+#ifdef DEBUG
+char buff[100];
+#endif
+
 void readSensors(ADC_HandleTypeDef adcInstance, uint16_t ADCPressed[]);
+void sensorWait(ADC_HandleTypeDef adcInstance, uint16_t ADCPressed[]);
 
 int main(void)
 {
@@ -45,11 +53,7 @@ int main(void)
     // declare analog input array to store pressed state for pins A1-A4
     uint16_t ADCPressed[4];
 
-    // wait for a sensor to be pressed
-    readSensors(adcInstance, ADCPressed);
-    while (!(ADCPressed[0] || ADCPressed[1] || ADCPressed[2] || ADCPressed[3])){
-        readSensors(adcInstance, ADCPressed);
-    }
+    sensorWait(adcInstance, ADCPressed);
 
     // enter main puzzle loop
     bool complete = false;
@@ -102,7 +106,85 @@ int main(void)
             }
             HAL_Delay(500);
         }
-        
+
+        // enter loop for current puzzle attempt
+        bool failed = false;
+        for (int i = 0; !failed; ++i) {
+            sensorWait(adcInstance, ADCPressed);
+
+            // determine which sensor was pressed
+            // (0 -> yellow, 1 -> green, 2 -> red, 3 -> blue, >3 -> more than one pressed)
+            uint16_t pressedSensor = 0;
+            for (int i = 0; i < 4; ++i) {
+                if (ADCPressed[i]) {
+                    pressedSensor += i;
+                }
+            }
+
+            // evaluate whether sensor pressed matches sequence so far: if so and not at end of sequence, move on;
+            // if not, start the next attempt; if so and at end of sequence, begin win routine
+            if (pressedSensor == randomLEDSequence[i]) {
+                if (i == 3) {
+                    complete = true;
+                    break;
+                }
+
+                // wait for sensor to not be pressed before proceeding on; if another is stepped on before this, attempt is failed
+                while(true) {
+                    // brief delay so variance in analog value cannot register as an immediate press -> unpress
+                    HAL_Delay(100);
+                    readSensors(adcInstance, ADCPressed);
+                    // proceed if sensor is no longer pressed
+                    if (ADCPressed[pressedSensor] == 0) {
+                        break;
+                    }
+                    // tally up pressed values for all sensors -- if greater than 1, more than one sensor is pressed; puzzle failed
+                    uint16_t pressCount = 0;
+                    for (int j = 0; j < 4; ++j) {
+                        if (ADCPressed[j] == 1) { ++pressCount; }
+                    }
+                    if (pressCount > 1) { 
+                        #ifdef DEBUG 
+                        sprintf(buff, "Fail condition: Second pad pressed during wait (Tick count: %lu)\n", HAL_GetTick());
+                        SerialPuts(buff);
+                        sprintf(buff, "Random LED sequence: %hu, %hu, %hu, %hu\n", randomLEDSequence[0], randomLEDSequence[1], randomLEDSequence[2], randomLEDSequence[3]);
+                        SerialPuts(buff);
+                        sprintf(buff, "Pin A1 (Y): %hu \t Pin A2 (G): %hu \t Pin A3 (R): %hu \t Pin A4 (B): %hu \t pressedSensor = %hu \t i = %hu\n\n", 
+                        ReadADC(&adcInstance, ADC_CHANNEL_1), ReadADC(&adcInstance, ADC_CHANNEL_4), ReadADC(&adcInstance, ADC_CHANNEL_8), ReadADC(&adcInstance, ADC_CHANNEL_11), pressedSensor, i);
+                        SerialPuts(buff);
+                        #endif
+
+                        failed = true; 
+                        break;
+                    }
+                }
+                // delay briefly before continuing to ensure small variance in analog values does not immediately fail next part of sequence
+                HAL_Delay(100);
+                continue;
+            } else {
+                #ifdef DEBUG 
+                char buff[100];
+                sprintf(buff, "Fail condition: Either wrong pad pressed or two pressed at once (Tick count: %lu)\n", HAL_GetTick());
+                SerialPuts(buff);
+                sprintf(buff, "Random LED sequence: %hu, %hu, %hu, %hu\n", randomLEDSequence[0], randomLEDSequence[1], randomLEDSequence[2], randomLEDSequence[3]);
+                SerialPuts(buff);
+                sprintf(buff, "Pin A1 (Y): %hu \t Pin A2 (G): %hu \t Pin A3 (R): %hu \t Pin A4 (B): %hu \t pressedSensor = %hu \t i = %hu\n\n", 
+                ReadADC(&adcInstance, ADC_CHANNEL_1), ReadADC(&adcInstance, ADC_CHANNEL_4), ReadADC(&adcInstance, ADC_CHANNEL_8), ReadADC(&adcInstance, ADC_CHANNEL_11), pressedSensor, i);
+                SerialPuts(buff);
+                #endif
+
+                failed = true;
+            }
+
+        }
+    }
+
+    // win routine: blink LEDs quickly thrice
+    for (int i = 0; i < 6; ++i) {
+        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6 | GPIO_PIN_7);
+        HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_6);
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_7);
+        HAL_Delay(500);
     }
 
     return 0;
@@ -129,6 +211,14 @@ void readSensors(ADC_HandleTypeDef adcInstance, uint16_t ADCPressed[]) {
         ADCPressed[3] = 1;
     } else {
         ADCPressed[3] = 0;
+    }
+}
+
+// waits for a sensor to be pressed
+void sensorWait(ADC_HandleTypeDef adcInstance, uint16_t ADCPressed[]) {
+    readSensors(adcInstance, ADCPressed);
+    while (!(ADCPressed[0] || ADCPressed[1] || ADCPressed[2] || ADCPressed[3])){
+        readSensors(adcInstance, ADCPressed);
     }
 }
 
