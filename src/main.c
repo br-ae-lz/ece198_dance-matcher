@@ -22,6 +22,7 @@ char buff[100];
 
 void readSensors(ADC_HandleTypeDef adcInstance, uint16_t ADCPressed[]);
 void sensorWait(ADC_HandleTypeDef adcInstance, uint16_t ADCPressed[]);
+void lightLEDs(uint16_t ADCPressed[]);
 
 int main(void)
 {
@@ -57,8 +58,13 @@ int main(void)
 
     // enter main puzzle loop
     bool complete = false;
-    while (!complete)
-    {
+    while (!complete) {
+        // ensures all LEDs are off before beginning (this prevents weird behaviour following failed attempts)
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
+
         for (int i = 0; i < 2; ++i) {
             HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_6 | GPIO_PIN_7);
             HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_6);
@@ -131,6 +137,10 @@ int main(void)
 
                 // wait for sensor to not be pressed before proceeding on; if another is stepped on before this, attempt is failed
                 while(true) {
+                    
+                    // for as long as sensor is pressed, light up its corresponding LED
+                    lightLEDs(ADCPressed);
+                    
                     // brief delay so variance in analog value cannot register as an immediate press -> unpress
                     HAL_Delay(100);
                     readSensors(adcInstance, ADCPressed);
@@ -153,13 +163,15 @@ int main(void)
                         ReadADC(&adcInstance, ADC_CHANNEL_1), ReadADC(&adcInstance, ADC_CHANNEL_4), ReadADC(&adcInstance, ADC_CHANNEL_8), ReadADC(&adcInstance, ADC_CHANNEL_11), pressedSensor, i);
                         SerialPuts(buff);
                         #endif
-
+                    
                         failed = true; 
                         break;
                     }
                 }
                 // delay briefly before continuing to ensure small variance in analog values does not immediately fail next part of sequence
                 HAL_Delay(100);
+                // turn off LED now that sensor is unpressed
+                lightLEDs(ADCPressed);
                 continue;
             } else {
                 #ifdef DEBUG 
@@ -219,6 +231,33 @@ void sensorWait(ADC_HandleTypeDef adcInstance, uint16_t ADCPressed[]) {
     readSensors(adcInstance, ADCPressed);
     while (!(ADCPressed[0] || ADCPressed[1] || ADCPressed[2] || ADCPressed[3])){
         readSensors(adcInstance, ADCPressed);
+    }
+}
+
+// lights corresponding LEDs based on current sensor pressed states
+void lightLEDs(uint16_t ADCPressed[]) {
+    if (ADCPressed[0]) {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_6, GPIO_PIN_RESET);
+    }
+
+    if (ADCPressed[1]) {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_7, GPIO_PIN_RESET);
+    }
+
+    if (ADCPressed[2]) {
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+    }
+
+    if (ADCPressed[3]) {
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_7, GPIO_PIN_RESET);
     }
 }
 
